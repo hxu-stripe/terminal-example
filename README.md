@@ -1,5 +1,9 @@
 # terminal demo app
 
+Note that this demo is not intended to be used in production.  This does not implement
+a lot of error handling, and is not fully secure.  This is only intended to be an example 
+to illustrate the interactions between the components of the Stripe Terminal, the front end, and the backend.
+
 ## Demo layout
 
 This app consists of:
