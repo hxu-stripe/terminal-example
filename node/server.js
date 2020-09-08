@@ -49,6 +49,14 @@ app.post("/create-payment-intent", async (req, res) => {
   });
 });
 
+
+app.post("/capture-payment-intent", async (req, res) => {
+  const { paymentIntentId } = req.body;
+
+  let result = await stripe.paymentIntents.capture(paymentIntentId);
+  console.log(result);
+});
+
 // Webhook handler for asynchronous events.
 app.post("/webhook", async (req, res) => {
   // Check if webhook signing is configured.

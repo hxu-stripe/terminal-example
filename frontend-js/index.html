@@ -29,6 +29,10 @@
 <div id="pi">
 </div>
 
+<div>
+  <button id="collect-payment-method">Simulate card tap</button>
+</div>
+
 </body>
 
 <script>
@@ -95,6 +99,8 @@
     });
   }
 
+
+  let clientSecret;
   function startPayment() {
     const amount = document.getElementById('amount').value;
 
@@ -111,12 +117,15 @@
       })
       .then(function(data) {
         document.getElementById('pi').innerHTML = data.id;
+        clientSecret = data.clientSecret;
         return data;
       });
   }
   document.getElementById('start-payment').addEventListener('click', startPayment);
 
-  function checkout(clientSecret) {
+
+  let paymentIntent;
+  function checkout() {
     // Test mode only
     terminal.setSimulatorConfiguration({testCardNumber: '4242424242424242'});
 
@@ -127,9 +136,35 @@
         // Placeholder for handling result.error
       } else {
         // Placeholder for processing result.paymentIntent
+        terminal.processPayment(result.paymentIntent).then(function(result) {
+          console.log(result);
+          if (result.error) {
+            // Placeholder for handling result.error
+          } else if (result.paymentIntent) {
+            // Placeholder for notifying your backend to capture result.paymentIntent.id
+            capturePayment(result.paymentIntent.id);
+          }
+        });
       }
-      return result;
     });
+  }
+  document.getElementById('collect-payment-method').addEventListener('click', checkout);
+
+  function capturePayment(paymentIntentId) {
+    return fetch(BACKEND_URL + 'capture-payment-intent',
+      {
+        method: "POST" ,
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({paymentIntentId: paymentIntentId})
+      })
+      .then(function(response) {
+        return response.json();
+      })
+      .then(function(data) {
+        return data;
+      });
   }
 
   function go() {
