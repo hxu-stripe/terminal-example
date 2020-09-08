@@ -1,11 +1,14 @@
 const express = require("express");
+const cors = require('cors');
 const app = express();
 const { resolve } = require("path");
 // Copy the .env.example in the root into a .env file in this folder
 const env = require("dotenv").config({ path: "./.env" });
 const stripe = require("stripe")(process.env.STRIPE_SECRET_KEY);
 
-app.use(express.static(process.env.STATIC_DIR));
+// Allows cross-origin requests for developing on localhost
+app.use(cors());
+
 app.use(
   express.json({
     // We need the raw body to verify webhook signatures.
@@ -18,25 +21,23 @@ app.use(
   })
 );
 
-app.get("/", (req, res) => {
-  // Display checkout page
-  const path = resolve(process.env.STATIC_DIR + "/index.html");
-  res.sendFile(path);
+app.post("/connection-token", async (req, res) => {
+
+  const connectionToken = await stripe.terminal.connectionTokens.create();
+
+  res.send({
+    secret: connectionToken.secret
+  });
 });
 
-const calculateOrderAmount = items => {
-  // Replace this constant with a calculation of the order's amount
-  // Calculate the order total on the server to prevent
-  // people from directly manipulating the amount on the client
-  return 1400;
-};
 
 app.post("/create-payment-intent", async (req, res) => {
   const { items, currency } = req.body;
   // Create a PaymentIntent with the order amount and currency
   const paymentIntent = await stripe.paymentIntents.create({
-    amount: calculateOrderAmount(items),
-    currency: currency,
+    amount: 1000,
+    currency: 'sgd',
+    payment_method_types: ['card_present'],
     capture_method: "manual"
   });
 
@@ -90,5 +91,14 @@ app.post("/webhook", async (req, res) => {
   }
   res.sendStatus(200);
 });
+
+const capturePaymentIntent = function() {
+
+};
+
+
+const getUncapturedPaymentIntents = function() {
+
+};
 
 app.listen(4242, () => console.log(`Node server listening on port ${4242}!`));

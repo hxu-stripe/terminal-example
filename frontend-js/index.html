@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+  <meta name="theme-color" content="#000000">
+  <title>Stripe Terminal JS Example</title>
+</head>
+<body>
+<noscript>
+  You need to enable JavaScript to run this app.
+</noscript>
+<script src="https://js.stripe.com/terminal/v1/sdk.js"></script>
+<div id="root"></div>
+
+<button id="find-readers">Find readers</button>
+
+<div>
+  <ul id="readers"></ul>
+</div>
+</body>
+
+<script>
+  const BACKEND_URL = 'http://localhost:4242/';
+
+  function fetchConnectionToken() {
+    // Your backend should call /v1/terminal/connection_tokens and return the JSON response from Stripe
+    return fetch(BACKEND_URL + 'connection-token', { method: "POST" })
+      .then(function(response) {
+        return response.json();
+      })
+      .then(function(data) {
+        return data.secret;
+      });
+  }
+
+  function unexpectedDisconnect() {
+    console.log("Disconnected from reader")
+  }
+
+  var terminal = StripeTerminal.create({
+    onFetchConnectionToken: fetchConnectionToken,
+    onUnexpectedReaderDisconnect: unexpectedDisconnect,
+  });
+
+  let readers;
+
+  function findReaders() {
+    var config = {simulated: true};
+    terminal.discoverReaders(config).then(function(discoverResult) {
+      if (discoverResult.error) {
+        console.log('Failed to discover: ', discoverResult.error);
+      } else if (discoverResult.discoveredReaders.length === 0) {
+        console.log('No available readers.');
+      } else {
+        console.log(discoverResult);
+        const element = document.getElementById('readers');
+        readers = discoverResult.discoveredReaders;
+        readers.forEach(function(r, i) {
+          let item = document.createElement('li');
+          item.innerHTML = '<a href class="readers" id="' + i + '">' + r.label + '</ah>';
+          element.append(item);
+        });
+
+        document.querySelector('.readers').addEventListener('click', function(e) {
+          e.preventDefault();
+          console.log(e.target.id);
+        });
+      }
+    });
+  }
+  document.getElementById('find-readers').addEventListener('click', findReaders);
+
+  function connectToReader(id) {
+    let selectedReader = readers[id];
+
+    terminal.connectReader(selectedReader).then(function(connectResult) {
+      if (connectResult.error) {
+        console.log('Failed to connect: ', connectResult.error);
+      } else {
+        console.log('Connected to reader: ', connectResult.reader.label);
+      }
+    });
+  }
+
+  // Handler for a "Connect Reader" button
+  function connectReaderHandler() {
+    var config = {simulated: true};
+    terminal.discoverReaders(config).then(function(discoverResult) {
+      if (discoverResult.error) {
+        console.log('Failed to discover: ', discoverResult.error);
+      } else if (discoverResult.discoveredReaders.length === 0) {
+        console.log('No available readers.');
+      } else {
+        // Just select the first reader here.
+        var selectedReader = discoverResult.discoveredReaders[0];
+
+        terminal.connectReader(selectedReader).then(function(connectResult) {
+          if (connectResult.error) {
+            console.log('Failed to connect: ', connectResult.error);
+          } else {
+            console.log('Connected to reader: ', connectResult.reader.label);
+          }
+        });
+      }
+    });
+  }
+
+
+  function makePayment() {
+    return fetch(BACKEND_URL + 'create-payment-intent', { method: "POST" })
+      .then(function(response) {
+        return response.json();
+      })
+      .then(function(data) {
+        return data;
+      });
+  }
+
+  function checkout(clientSecret) {
+    // Test mode only
+    terminal.setSimulatorConfiguration({testCardNumber: '4242424242424242'});
+
+    // clientSecret is the client_secret from the PaymentIntent you created in Step 1.
+    terminal.collectPaymentMethod(clientSecret).then(function(result) {
+      console.log(result);
+      if (result.error) {
+        // Placeholder for handling result.error
+      } else {
+        // Placeholder for processing result.paymentIntent
+      }
+      return result;
+    });
+  }
+
+  function go() {
+    makePayment().then(function(res) {
+      return checkout(res.clientSecret);
+    }).then(function(res) {
+      Promise.resolve(res).then(function(res) {
+        console.log(res);
+        terminal.processPayment(paymentIntent).then(function(result) {
+          console.log(result)
+          if (result.error) {
+            // Placeholder for handling result.error
+          } else if (result.paymentIntent) {
+            // Placeholder for notifying your backend to capture result.paymentIntent.id
+          }
+        });
+      })
+    });
+  }
+
+</script>
+</html>
