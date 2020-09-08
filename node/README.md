@@ -3,7 +3,7 @@ An [Express server](http://expressjs.com) implementation
 
 ## Requirements
 * Node v10+
-# A configured `.env` file
+* A configured `.env` file
 
 ## How to run
 

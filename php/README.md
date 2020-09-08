@@ -3,7 +3,7 @@
 ## Requirements
 * PHP >= 7.1.3
 * [Slim](http://www.slimframework.com/)
-# A configured `.env` file
+* A configured `.env` file
 
 ## How to run
 
