@@ -14,6 +14,7 @@ if (PHP_SAPI == 'cli-server') {
   $_SERVER['SCRIPT_NAME'] = '/index.php';
 }
 
+error_reporting(E_ERROR | E_WARNING);
 $app = new \Slim\App;
 
 // Instantiate the logger as a dependency
@@ -28,21 +29,21 @@ $container['logger'] = function ($c) {
 
 $app->add(function ($request, $response, $next) {
     Stripe::setApiKey(getenv('STRIPE_SECRET_KEY'));
-    return $next($request, $response);
+    return $next($request, $response)
+    // Allow CORS requests for localhost.
+    // Do not set this to the wildcard in production, since it is insecure
+      ->withHeader('Access-Control-Allow-Origin', '*')
+      ->withHeader('Access-Control-Allow-Headers', 'X-Requested-With, Content-Type, Accept, Origin, Authorization')
+      ->withHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, PATCH, OPTIONS');
 });
 
-$app->get('/', function (Request $request, Response $response, array $args) {   
-  // Display checkout page
-  return $response->write(file_get_contents(getenv('STATIC_DIR') . '/index.html'));
+$app->post('/connection-token', function (Request $request, Response $response, array $args) {
+    $connectionToken = \Stripe\Terminal\ConnectionToken::create();
+    $logger = $this->get('logger');
+    $logger->info($connectionToken);
+    return $response->withJson(array('secret' => $connectionToken->secret));
 });
 
-function calculateOrderAmount($items)
-{
-  // Replace this constant with a calculation of the order's amount
-  // Calculate the order total on the server to prevent
-  // people from directly manipulating the amount on the client
-  return 1400;
-}
 
 $app->post('/create-payment-intent', function (Request $request, Response $response, array $args) {
     $pub_key = getenv('STRIPE_PUBLISHABLE_KEY');
@@ -50,8 +51,9 @@ $app->post('/create-payment-intent', function (Request $request, Response $respo
 
     // Create a PaymentIntent with the order amount and currency
     $payment_intent = \Stripe\PaymentIntent::create([
-      "amount" => calculateOrderAmount($body->items),
-      "currency" => $body->currency,
+      "amount" => $body->amount,
+      "currency" => "sgd",
+      'payment_method_types' => ['card_present'],
       "capture_method" => "manual"
     ]);
     
@@ -59,7 +61,18 @@ $app->post('/create-payment-intent', function (Request $request, Response $respo
     return $response->withJson(array('publicKey' => $pub_key, 'clientSecret' => $payment_intent->client_secret, 'id' => $payment_intent->id));
 });
 
-$app->post('/webhook', function(Request $request, Response $response) {
+$app->post('/capture-payment-intent', function (Request $request, Response $response, array $args) {
+    $body = json_decode($request->getBody());
+
+    $intent = \Stripe\PaymentIntent::retrieve($body->paymentIntentId);
+    $intent->capture();
+
+    // Send publishable key and PaymentIntent details to client
+    return $response->withJson(array('status' => $intent->status));
+});
+
+
+$app->post('/webhook-capture-payment-intent', function(Request $request, Response $response) {
     $logger = $this->get('logger');
     $event = $request->getParsedBody();
     // Parse the message body (and check the signature if possible)
@@ -87,12 +100,6 @@ $app->post('/webhook', function(Request $request, Response $response) {
       $intent = \Stripe\PaymentIntent::retrieve($object->id);
       $logger->info('❗ Charging the card for: ' . $intent->amount_capturable);
       $intent->capture();
-    } else if ($type == 'payment_intent.succeeded') {
-      // Fulfill any orders, e-mail receipts, etc
-      // To cancel the payment after capture you will need to issue a Refund (https://stripe.com/docs/api/refunds)
-      $logger->info('💰 Payment received! ');
-    } else if ($type == 'payment_intent.payment_failed') {
-      $logger->info('❌ Payment failed.');
     }
 
     return $response->withJson([ 'status' => 'success' ])->withStatus(200);
