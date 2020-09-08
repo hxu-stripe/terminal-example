@@ -4,6 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
   <meta name="theme-color" content="#000000">
+  <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css" integrity="sha384-JcKb8q3iqJ61gNV9KGb8thSsNjpSL0n8PARn9HuZOnIxN0hoP+VmmDGMN5t9UJ0Z" crossorigin="anonymous">
   <title>Stripe Terminal JS Example</title>
 </head>
 <body>
@@ -11,32 +12,49 @@
   You need to enable JavaScript to run this app.
 </noscript>
 <script src="https://js.stripe.com/terminal/v1/sdk.js"></script>
-<div id="root"></div>
-
-<div>
-  <button id="find-readers">Find readers</button>
+<div class="container">
+  <h1>Terminal demo app</h1>
+  <div class="row">
+    <div class="col">
+      <h3>Simulate a checkout process</h3>
+      <div class="row">
+        <button type="button" class="btn btn-primary" id="find-readers">Find readers</button>
+      </div>
+      <br />
+      <div class="row">
+        <ul id="readers"></ul>
+      </div>
+      <br />
+      <div class="row">
+        <div class="input-group">
+          <label>Amount in cents:</label>
+          <input id="amount" />
+        </div>
+        <button type="button" class="btn btn-primary" id="start-payment" disabled>Start payment</button>
+      </div>
+      <br />
+      <div class="row">
+        <button type="button" class="btn btn-primary" id="collect-payment-method" disabled>Simulate payment method collection</button>
+      </div>
+      <br />
+    </div>
+    <div class="col">
+      <h3>Status messages</h3>
+      <div class="row">
+        <div id="messages">
+        </div>
+      </div>
+    </div>
+  </div>
 </div>
-
-<div>
-  <ul id="readers"></ul>
-</div>
-
-
-<div>
-  <label>Amount in cents:</label><input id="amount" />
-  <button id="start-payment">Start payment</button>
-</div>
-<div id="pi">
-</div>
-
-<div>
-  <button id="collect-payment-method">Simulate card tap</button>
-</div>
-
 </body>
 
 <script>
   const BACKEND_URL = 'http://localhost:4242/';
+  let readers;
+  let clientSecret;
+  let paymentIntent;
+  let messages = document.getElementById('messages');
 
   function fetchConnectionToken() {
     // Your backend should call /v1/terminal/connection_tokens and return the JSON response from Stripe
@@ -50,25 +68,37 @@
   }
 
   function unexpectedDisconnect() {
+    // Handle unexpected disconnections
     console.log("Disconnected from reader")
   }
 
+  // Initalize the Terminal SDK
   var terminal = StripeTerminal.create({
     onFetchConnectionToken: fetchConnectionToken,
     onUnexpectedReaderDisconnect: unexpectedDisconnect,
   });
 
-  let readers;
 
   function findReaders() {
+    /*
+    Finds available readers on the network, and displays
+    the list of readers on the POS for the attendant to select
+     */
+
+    // simulated should be false in your actual application
     var config = {simulated: true};
+    messages.innerHTML += '<p>Looking for readers...</p>';
     terminal.discoverReaders(config).then(function(discoverResult) {
       if (discoverResult.error) {
         console.log('Failed to discover: ', discoverResult.error);
       } else if (discoverResult.discoveredReaders.length === 0) {
         console.log('No available readers.');
       } else {
+        // Populate the POS UI with the list of discovered readers
+        // This implementation is specific to this demo app, and you should adapt it
+        // for your app
         console.log(discoverResult);
+        messages.innerHTML += '<p>Select an available reader</p>';
         const element = document.getElementById('readers');
         readers = discoverResult.discoveredReaders;
         readers.forEach(function(r, i) {
@@ -77,6 +107,7 @@
           element.append(item);
         });
 
+        // Attach a click listener to allow the user to select the appropriate reader
         document.querySelector('.readers').addEventListener('click', function(e) {
           e.preventDefault();
           console.log(e.target.id);
@@ -88,21 +119,42 @@
   document.getElementById('find-readers').addEventListener('click', findReaders);
 
   function connectToReader(id) {
+    /*
+    Connect to the selected reader
+     */
     let selectedReader = readers[id];
 
+    messages.innerHTML += '<p>Connecting to reader...</p>';
     terminal.connectReader(selectedReader).then(function(connectResult) {
       if (connectResult.error) {
         console.log('Failed to connect: ', connectResult.error);
       } else {
-        console.log('Connected to reader: ', connectResult.reader.label);
+        let message = 'Connected to reader: ' + connectResult.reader.label;
+        console.log(message);
+        messages.innerHTML += '<p>' + message + '</p>';
+
+        messages.innerHTML += '<p>Enter a payment amount and start the payment</p>';
+        // Enable the next step
+        document.getElementById('start-payment').disabled = false;
       }
     });
   }
 
-
-  let clientSecret;
   function startPayment() {
+    /*
+    Start a payment flow by asking your backend to create a PaymentIntent
+     */
     const amount = document.getElementById('amount').value;
+
+    // Check that the amount is valid
+    let intAmount = parseInt(amount);
+    if (!Number.isInteger(intAmount)) {
+      alert('Please enter a valid amount');
+      return;
+    } else if (intAmount <= 50) {
+      alert('Please enter an amount larger than SGD $0.50');
+      return;
+    }
 
     return fetch(BACKEND_URL + 'create-payment-intent',
       {
@@ -116,41 +168,65 @@
         return response.json();
       })
       .then(function(data) {
-        document.getElementById('pi').innerHTML = data.id;
         clientSecret = data.clientSecret;
+        messages.innerHTML += '<p>Created PaymentIntent with ID ' + data.id + '</p>';
+
+        messages.innerHTML += '<p>Simulate a payment method collection</p>';
+        // Enable the next step
+        document.getElementById('collect-payment-method').disabled = false;
+
         return data;
       });
   }
   document.getElementById('start-payment').addEventListener('click', startPayment);
 
-
-  let paymentIntent;
   function checkout() {
-    // Test mode only
+    /*
+    Ask the reader to collect payment details
+     */
+
+    // Use the simulated reader to collect a simulated test card
     terminal.setSimulatorConfiguration({testCardNumber: '4242424242424242'});
 
-    // clientSecret is the client_secret from the PaymentIntent you created in Step 1.
+    // clientSecret is the client_secret from the PaymentIntent you created earlier.
+    // This collects the payment details and attaches it to the PaymentIntent
+    messages.innerHTML += '<p>Simulating a checkout on the Terminal</p>';
     terminal.collectPaymentMethod(clientSecret).then(function(result) {
       console.log(result);
       if (result.error) {
         // Placeholder for handling result.error
       } else {
-        // Placeholder for processing result.paymentIntent
-        terminal.processPayment(result.paymentIntent).then(function(result) {
-          console.log(result);
-          if (result.error) {
-            // Placeholder for handling result.error
-          } else if (result.paymentIntent) {
-            // Placeholder for notifying your backend to capture result.paymentIntent.id
-            capturePayment(result.paymentIntent.id);
-          }
-        });
+        // If we are successful, then we call out to the Stripe API to confirm the PaymentIntent
+        messages.innerHTML += '<p>Successfully collected the PaymentMethod</p>';
+        messages.innerHTML += '<p>Processing the payment</p>';
+        processPayment(result.paymentIntent)
       }
     });
   }
   document.getElementById('collect-payment-method').addEventListener('click', checkout);
 
+  function processPayment(paymentIntent) {
+    /*
+    Confirms the PaymentIntent with the collected PaymentMethod
+     */
+    terminal.processPayment(paymentIntent).then(function(result) {
+      console.log(result);
+      if (result.error) {
+        // Placeholder for handling result.error
+      } else if (result.paymentIntent) {
+        // At this point, the payment is authorized with the card networks.
+        // We can stop here, but we must capture the PaymentIntent through another process within 24 hours
+        // Here, we call our backend to capture the PaymentIntent immediately
+        messages.innerHTML += '<p>Successfully confirmed the PaymentIntent</p>';
+        capturePayment(result.paymentIntent.id);
+      }
+    });
+  }
+
   function capturePayment(paymentIntentId) {
+    /*
+    Calls our backend to capture a PaymentIntent
+     */
     return fetch(BACKEND_URL + 'capture-payment-intent',
       {
         method: "POST" ,
@@ -163,27 +239,9 @@
         return response.json();
       })
       .then(function(data) {
+        messages.innerHTML += '<p>Captured the PaymentIntent</p>';
         return data;
       });
   }
-
-  function go() {
-    makePayment().then(function(res) {
-      return checkout(res.clientSecret);
-    }).then(function(res) {
-      Promise.resolve(res).then(function(res) {
-        console.log(res);
-        terminal.processPayment(paymentIntent).then(function(result) {
-          console.log(result)
-          if (result.error) {
-            // Placeholder for handling result.error
-          } else if (result.paymentIntent) {
-            // Placeholder for notifying your backend to capture result.paymentIntent.id
-          }
-        });
-      })
-    });
-  }
-
 </script>
 </html>

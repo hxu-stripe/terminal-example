@@ -22,7 +22,6 @@ app.use(
 );
 
 app.post("/connection-token", async (req, res) => {
-
   const connectionToken = await stripe.terminal.connectionTokens.create();
 
   res.send({
@@ -55,10 +54,12 @@ app.post("/capture-payment-intent", async (req, res) => {
 
   let result = await stripe.paymentIntents.capture(paymentIntentId);
   console.log(result);
+
+  res.send({status: result.status});
 });
 
 // Webhook handler for asynchronous events.
-app.post("/webhook", async (req, res) => {
+app.post("/webhook-capture-payment-intent", async (req, res) => {
   // Check if webhook signing is configured.
   if (env.parsed.STRIPE_WEBHOOK_SECRET) {
     // Retrieve the event by verifying the signature using the raw body and secret.
@@ -85,28 +86,10 @@ app.post("/webhook", async (req, res) => {
 
   if (eventType === "payment_intent.amount_capturable_updated") {
     console.log(`❗ Charging the card for: ${data.object.amount_capturable}`);
-    // You can capture an amount less than or equal to the amount_capturable
-    // By default capture() will capture the full amount_capturable
-    // To cancel a payment before capturing use .cancel() (https://stripe.com/docs/api/payment_intents/cancel)
     const intent = await stripe.paymentIntents.capture(data.object.id);
-  } else if (eventType === "payment_intent.succeeded") {
-    // Funds have been captured
-    // Fulfill any orders, e-mail receipts, etc
-    // To cancel the payment after capture you will need to issue a Refund (https://stripe.com/docs/api/refunds)
-    console.log("💰 Payment captured!");
-  } else if (eventType === "payment_intent.payment_failed") {
-    console.log("❌ Payment failed.");
   }
+
   res.sendStatus(200);
 });
-
-const capturePaymentIntent = function() {
-
-};
-
-
-const getUncapturedPaymentIntents = function() {
-
-};
 
 app.listen(4242, () => console.log(`Node server listening on port ${4242}!`));
