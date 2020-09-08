@@ -32,10 +32,10 @@ app.post("/connection-token", async (req, res) => {
 
 
 app.post("/create-payment-intent", async (req, res) => {
-  const { items, currency } = req.body;
+  const { amount } = req.body;
   // Create a PaymentIntent with the order amount and currency
   const paymentIntent = await stripe.paymentIntents.create({
-    amount: 1000,
+    amount: amount,
     currency: 'sgd',
     payment_method_types: ['card_present'],
     capture_method: "manual"

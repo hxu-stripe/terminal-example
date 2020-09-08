@@ -13,11 +13,22 @@
 <script src="https://js.stripe.com/terminal/v1/sdk.js"></script>
 <div id="root"></div>
 
-<button id="find-readers">Find readers</button>
+<div>
+  <button id="find-readers">Find readers</button>
+</div>
 
 <div>
   <ul id="readers"></ul>
 </div>
+
+
+<div>
+  <label>Amount in cents:</label><input id="amount" />
+  <button id="start-payment">Start payment</button>
+</div>
+<div id="pi">
+</div>
+
 </body>
 
 <script>
@@ -65,6 +76,7 @@
         document.querySelector('.readers').addEventListener('click', function(e) {
           e.preventDefault();
           console.log(e.target.id);
+          connectToReader(e.target.id);
         });
       }
     });
@@ -83,39 +95,26 @@
     });
   }
 
-  // Handler for a "Connect Reader" button
-  function connectReaderHandler() {
-    var config = {simulated: true};
-    terminal.discoverReaders(config).then(function(discoverResult) {
-      if (discoverResult.error) {
-        console.log('Failed to discover: ', discoverResult.error);
-      } else if (discoverResult.discoveredReaders.length === 0) {
-        console.log('No available readers.');
-      } else {
-        // Just select the first reader here.
-        var selectedReader = discoverResult.discoveredReaders[0];
+  function startPayment() {
+    const amount = document.getElementById('amount').value;
 
-        terminal.connectReader(selectedReader).then(function(connectResult) {
-          if (connectResult.error) {
-            console.log('Failed to connect: ', connectResult.error);
-          } else {
-            console.log('Connected to reader: ', connectResult.reader.label);
-          }
-        });
-      }
-    });
-  }
-
-
-  function makePayment() {
-    return fetch(BACKEND_URL + 'create-payment-intent', { method: "POST" })
+    return fetch(BACKEND_URL + 'create-payment-intent',
+      {
+        method: "POST" ,
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({amount: parseInt(amount)})
+      })
       .then(function(response) {
         return response.json();
       })
       .then(function(data) {
+        document.getElementById('pi').innerHTML = data.id;
         return data;
       });
   }
+  document.getElementById('start-payment').addEventListener('click', startPayment);
 
   function checkout(clientSecret) {
     // Test mode only
