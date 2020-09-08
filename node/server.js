@@ -20,8 +20,12 @@ app.use(
     }
   })
 );
+/****
+ * Discovering readers
+ */
 
 app.post("/connection-token", async (req, res) => {
+  // Step 0-2
   const connectionToken = await stripe.terminal.connectionTokens.create();
 
   res.send({
@@ -29,10 +33,14 @@ app.post("/connection-token", async (req, res) => {
   });
 });
 
+/****
+ * Payment
+ */
 
 app.post("/create-payment-intent", async (req, res) => {
   const { amount } = req.body;
   // Create a PaymentIntent with the order amount and currency
+  // Step 1-2, 1-3
   const paymentIntent = await stripe.paymentIntents.create({
     amount: amount,
     currency: 'sgd',
@@ -41,6 +49,7 @@ app.post("/create-payment-intent", async (req, res) => {
   });
 
   // Send publishable key and PaymentIntent details to client
+  // Step 1-4
   res.send({
     publicKey: env.parsed.STRIPE_PUBLISHABLE_KEY,
     clientSecret: paymentIntent.client_secret,
@@ -52,13 +61,16 @@ app.post("/create-payment-intent", async (req, res) => {
 app.post("/capture-payment-intent", async (req, res) => {
   const { paymentIntentId } = req.body;
 
+  // Step 4a-2
   let result = await stripe.paymentIntents.capture(paymentIntentId);
   console.log(result);
 
+  // Step 4a-3
   res.send({status: result.status});
 });
 
 // Webhook handler for asynchronous events.
+// Only relevant for 4b process
 app.post("/webhook-capture-payment-intent", async (req, res) => {
   // Check if webhook signing is configured.
   if (env.parsed.STRIPE_WEBHOOK_SECRET) {
@@ -85,6 +97,7 @@ app.post("/webhook-capture-payment-intent", async (req, res) => {
   }
 
   if (eventType === "payment_intent.amount_capturable_updated") {
+    // Step 4b-2
     console.log(`❗ Charging the card for: ${data.object.amount_capturable}`);
     const intent = await stripe.paymentIntents.capture(data.object.id);
   }

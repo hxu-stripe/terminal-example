@@ -55,9 +55,13 @@
   let clientSecret;
   let paymentIntent;
   let messages = document.getElementById('messages');
+  /*****
+   * Discovering readers
+   * ****/
 
   function fetchConnectionToken() {
     // Your backend should call /v1/terminal/connection_tokens and return the JSON response from Stripe
+    // Step 0-1
     return fetch(BACKEND_URL + 'connection-token', { method: "POST" })
       .then(function(response) {
         return response.json();
@@ -73,6 +77,7 @@
   }
 
   // Initalize the Terminal SDK
+  // Step 0-3
   var terminal = StripeTerminal.create({
     onFetchConnectionToken: fetchConnectionToken,
     onUnexpectedReaderDisconnect: unexpectedDisconnect,
@@ -88,12 +93,14 @@
     // simulated should be false in your actual application
     var config = {simulated: true};
     messages.innerHTML += '<p>Looking for readers...</p>';
+    // Step 1-1
     terminal.discoverReaders(config).then(function(discoverResult) {
       if (discoverResult.error) {
         console.log('Failed to discover: ', discoverResult.error);
       } else if (discoverResult.discoveredReaders.length === 0) {
         console.log('No available readers.');
       } else {
+        // Step 1-3
         // Populate the POS UI with the list of discovered readers
         // This implementation is specific to this demo app, and you should adapt it
         // for your app
@@ -125,6 +132,7 @@
     let selectedReader = readers[id];
 
     messages.innerHTML += '<p>Connecting to reader...</p>';
+    // Step 2-1
     terminal.connectReader(selectedReader).then(function(connectResult) {
       if (connectResult.error) {
         console.log('Failed to connect: ', connectResult.error);
@@ -140,10 +148,14 @@
     });
   }
 
+  /*****
+   * Payment
+   * ****/
   function startPayment() {
     /*
     Start a payment flow by asking your backend to create a PaymentIntent
      */
+    // Step 0
     const amount = document.getElementById('amount').value;
 
     // Check that the amount is valid
@@ -156,6 +168,7 @@
       return;
     }
 
+    // Step 1-1
     return fetch(BACKEND_URL + 'create-payment-intent',
       {
         method: "POST" ,
@@ -168,6 +181,7 @@
         return response.json();
       })
       .then(function(data) {
+        // Step 1-5
         clientSecret = data.clientSecret;
         messages.innerHTML += '<p>Created PaymentIntent with ID ' + data.id + '</p>';
 
@@ -191,14 +205,17 @@
     // clientSecret is the client_secret from the PaymentIntent you created earlier.
     // This collects the payment details and attaches it to the PaymentIntent
     messages.innerHTML += '<p>Simulating a checkout on the Terminal</p>';
+    // Step 2-1 through 2-4
     terminal.collectPaymentMethod(clientSecret).then(function(result) {
       console.log(result);
       if (result.error) {
         // Placeholder for handling result.error
       } else {
         // If we are successful, then we call out to the Stripe API to confirm the PaymentIntent
+        // Step 2-5
         messages.innerHTML += '<p>Successfully collected the PaymentMethod</p>';
         messages.innerHTML += '<p>Processing the payment</p>';
+        // Step 3
         processPayment(result.paymentIntent)
       }
     });
@@ -209,6 +226,7 @@
     /*
     Confirms the PaymentIntent with the collected PaymentMethod
      */
+    // Step 3-2, 3-3
     terminal.processPayment(paymentIntent).then(function(result) {
       console.log(result);
       if (result.error) {
@@ -227,6 +245,7 @@
     /*
     Calls our backend to capture a PaymentIntent
      */
+    // Step 4a-1
     return fetch(BACKEND_URL + 'capture-payment-intent',
       {
         method: "POST" ,
